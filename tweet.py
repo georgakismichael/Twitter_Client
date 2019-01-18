@@ -62,11 +62,13 @@ def PrintUsageAndExit(errcode):
         print(USAGE)
         sys.exit(2)
     elif(errcode == 5):
-        print("Your message could not be encoded.  Perhaps it contains non-ASCII characters? ")
-        print("Try explicitly specifying the encoding with the --encoding flag")
+        print("Your message could not be encoded.  Perhaps it contains non-ASCII characters?")
+        print("Try explicitly specifying the encoding with the --encoding flag.")
         sys.exit(2)
     elif(errcode == 6):
-        print("Invalid .")
+        print("Warning: Invalid media file.")
+    elif(errcode == 7):
+        print("Twitter error.")
         sys.exit(2)
     
 class TweetRc(object):
@@ -117,7 +119,16 @@ def main():
 
     message = args[0]
     if(len(args)==2):
-        media = args[1]
+        if(("/" in args[1]) or ("\\" in args[1])):
+            if(os.path.isfile(args[1])):
+                media = args[1]
+            else:
+                PrintUsageAndExit(6)
+        else:
+            if(os.path.isfile(os.getcwd() + "\\" + args[1])):
+                media = args[1]
+            else:
+                PrintUsageAndExit(6)
     
     if not message:
         PrintUsageAndExit(3)
@@ -135,17 +146,22 @@ def main():
     if not consumer_key or not consumer_secret or not access_key or not access_secret:
         PrintUsageAndExit(4)
         
-    api = twitter.Api(consumer_key=consumer_key, consumer_secret=consumer_secret,
+    status = None
+    
+    try:
+        api = twitter.Api(consumer_key=consumer_key, consumer_secret=consumer_secret,
                       access_token_key=access_key, access_token_secret=access_secret,
                       input_encoding=encoding)
-    try:
+                      
         status = api.PostUpdate(message, media)
+        
     except UnicodeDecodeError:
         PrintUsageAndExit(5)
     except twitter.error.TwitterError as err:
-        PrintUsageAndExit(6)
+        PrintUsageAndExit(7)
 
-    print("{0} just posted: {1}".format(status.user.name, status.text))
+    if(status):
+        print("{0} just posted: {1}".format(status.user.name, status.text))
 
 if __name__ == "__main__":
     main()
