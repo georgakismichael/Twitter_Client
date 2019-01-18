@@ -16,65 +16,59 @@ import os
 import sys
 import twitter
 
+USAGE = '''
+    Usage: tweet [options] message
 
+    This script posts a message to Twitter.
 
-USAGE = '''Usage: tweet [options] message
-
-  This script posts a message to Twitter.
-
-  Options:
+    Options:
 
     -h --help : print this help
-    --consumer-key : the twitter consumer key
-    --consumer-secret : the twitter consumer secret
-    --access-key : the twitter access token key
-    --access-secret : the twitter access token secret
-    --encoding : the character set encoding used in input strings, e.g. "utf-8". [optional]
+    --encoding : the character set encoding used e.g. "utf-8". [optional]
 
-  Documentation:
+    Documentation:
 
-  If either of the command line flags are not present, the environment
-  variables TWEETUSERNAME and TWEETPASSWORD will then be checked for your
-  consumer_key or consumer_secret, respectively.
-
-  If neither the command line flags nor the environment variables are
-  present, the .tweetrc file, if it exists, can be used to set the
-  default consumer_key and consumer_secret.  The file should contain the
-  following three lines, replacing *consumer_key* with your consumer key, and
-  *consumer_secret* with your consumer secret:
-
-  A skeletal .tweetrc file:
+    The tweetrc file is used to set the user credentials.
+    The file should contain the following five lines, replacing 
+    each *value* with the proper respective one from 
+    https://developer.twitter.com.
 
     [Tweet]
     consumer_key: *consumer_key*
     consumer_secret: *consumer_password*
     access_key: *access_key*
     access_secret: *access_password*
-
 '''
 
-
-def PrintUsageAndExit():
-    #print(USAGE)
-    sys.exit(2)
-
-
-def GetConsumerKeyEnv():
-    return os.environ.get("TWEETUSERNAME", None)
-
-
-def GetConsumerSecretEnv():
-    return os.environ.get("TWEETPASSWORD", None)
-
-
-def GetAccessKeyEnv():
-    return os.environ.get("TWEETACCESSKEY", None)
-
-
-def GetAccessSecretEnv():
-    return os.environ.get("TWEETACCESSSECRET", None)
-
-
+def PrintUsageAndExit(errcode):
+    print("Error: " + str(errcode))
+    if(errcode == 0):
+        print(USAGE)
+        sys.exit(2)
+    elif(errcode == 1):
+        print("Missing or invalid file tweetrc.")
+        print(USAGE)
+        sys.exit(2)
+    elif(errcode == 2):
+        print("Invalid arguments passed.")
+        print(USAGE)
+        sys.exit(2)
+    elif(errcode == 3):
+        print("No message passed.")
+        print(USAGE)
+        sys.exit(2)
+    elif(errcode == 4):
+        print("Missing credentials.")
+        print(USAGE)
+        sys.exit(2)
+    elif(errcode == 5):
+        print("Your message could not be encoded.  Perhaps it contains non-ASCII characters? ")
+        print("Try explicitly specifying the encoding with the --encoding flag")
+        sys.exit(2)
+    elif(errcode == 6):
+        print("Invalid .")
+        sys.exit(2)
+    
 class TweetRc(object):
     def __init__(self):
         self._config = None
@@ -100,56 +94,56 @@ class TweetRc(object):
     def _GetConfig(self):
         if not self._config:
             self._config = configparser.ConfigParser()
-            readme = self._config.read(os.getcwd() + "\me.tweetrc")
+            self._config.read(os.getcwd() + "/tweetrc")
         return self._config
 
-
 def main():
-
     try:
         shortflags = 'h'
-        longflags = ['help', 'consumer-key=', 'consumer-secret=',
-                     'access-key=', 'access-secret=', 'encoding=']
+        longflags = ['help', 'encoding=']
         opts, args = getopt.gnu_getopt(sys.argv[1:], shortflags, longflags)
     except getopt.GetoptError:
-        PrintUsageAndExit()
-    consumer_keyflag = None
-    consumer_secretflag = None
-    access_keyflag = None
-    access_secretflag = None
+        PrintUsageAndExit(2)
+    
     encoding = None
+    message = None
+    media = None
+    
     for o, a in opts:
         if o in ("-h", "--help"):
-            PrintUsageAndExit()
-        if o in ("--consumer-key"):
-            consumer_keyflag = a
-        if o in ("--consumer-secret"):
-            consumer_secretflag = a
-        if o in ("--access-key"):
-            access_keyflag = a
-        if o in ("--access-secret"):
-            access_secretflag = a
+            PrintUsageAndExit(0)
         if o in ("--encoding"):
             encoding = a
-    message = ' '.join(args)
+
+    message = args[0]
+    if(len(args)==2):
+        media = args[1]
+    
     if not message:
-        PrintUsageAndExit()
-    rc = TweetRc()
-    consumer_key = consumer_keyflag or GetConsumerKeyEnv() or rc.GetConsumerKey()
-    consumer_secret = consumer_secretflag or GetConsumerSecretEnv() or rc.GetConsumerSecret()
-    access_key = access_keyflag or GetAccessKeyEnv() or rc.GetAccessKey()
-    access_secret = access_secretflag or GetAccessSecretEnv() or rc.GetAccessSecret()
+        PrintUsageAndExit(3)
+    
+    if(os.path.isfile(os.getcwd() + "/tweetrc")):
+        rc = TweetRc()
+    else:
+        PrintUsageAndExit(1)
+        
+    consumer_key = rc.GetConsumerKey()
+    consumer_secret = rc.GetConsumerSecret()
+    access_key = rc.GetAccessKey()
+    access_secret =  rc.GetAccessSecret()
+    
     if not consumer_key or not consumer_secret or not access_key or not access_secret:
-        PrintUsageAndExit()
+        PrintUsageAndExit(4)
+        
     api = twitter.Api(consumer_key=consumer_key, consumer_secret=consumer_secret,
                       access_token_key=access_key, access_token_secret=access_secret,
                       input_encoding=encoding)
     try:
-        status = api.PostUpdate(message, 'DxLmN0tWwAEU3li.jpg')
+        status = api.PostUpdate(message, media)
     except UnicodeDecodeError:
-        print("Your message could not be encoded.  Perhaps it contains non-ASCII characters? ")
-        print("Try explicitly specifying the encoding with the --encoding flag")
-        sys.exit(2)
+        PrintUsageAndExit(5)
+    except twitter.error.TwitterError as err:
+        PrintUsageAndExit(6)
 
     print("{0} just posted: {1}".format(status.user.name, status.text))
 
